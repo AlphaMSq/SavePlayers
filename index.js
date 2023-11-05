@@ -13,6 +13,30 @@ ll.registerPlugin('SavePlayers', 'Save players pos and inventory', [1, 0, 0], {
 
 const Logger = require('./methods/Log.js');
 const DB = require('./methods/DB.js');
+const { convertItem, convertShulker } = require('./methods/ConvertBE2JE.js');
+const fs = require('fs');
+
+/**
+ * Записывает данные в файл JSON.
+ *
+ * @param {string} filePath - Путь к файлу JSON, в который будут записаны данные.
+ * @param {object} data - Данные для записи в файл.
+ * @returns {Promise<boolean>} - Возвращает промис, который разрешается в `true`, если запись прошла успешно, иначе в `false`.
+ */
+function writeJsonToFile(filePath, data) {
+    return new Promise((resolve, reject) => {
+        const jsonData = JSON.stringify(data, null, 4); // Форматируем JSON с отступами для читаемости
+        fs.writeFile(filePath, jsonData, (error) => {
+            if (error) {
+                Logger.error(`Ошибка при записи в файл JSON: ${error.message}`);
+                reject(false);
+            } else {
+                Logger.log(`Данные успешно записаны в файл JSON: ${filePath}`);
+                resolve(true);
+            }
+        });
+    });
+}
 
 mc.listen("onServerStarted", () => {
     const cmd = mc.newCommand("saveinv", "Save players pos and inventory", PermType.GameMasters);
@@ -85,8 +109,10 @@ const saveInventory = async (pl) => {
         let itSlot = 1;
         await Promise.all(
             allInvItems.map(async (it) => {
-                const parsedNBTString = JSON.parse(it.getNbt().toString());
-                allInvItemsNBT[itSlot] = parsedNBTString;
+                const nbt = it.getNbt().toString();
+                const parsedNBTString = nbt;
+                const convertedItem = convertItem(parsedNBTString);
+                allInvItemsNBT[itSlot] = convertedItem;
                 itSlot++;
             })
         );
@@ -95,34 +121,39 @@ const saveInventory = async (pl) => {
         let itECSlot = 1;
         await Promise.all(
             allEchestItems.map(async (it) => {
-                const parsedNBTString = JSON.parse(it.getNbt().toString());
-                allEchestItemsNBT[itECSlot] = parsedNBTString;
+                const nbt = it.getNbt().toString();
+                const parsedNBTString = nbt
+                const convertedItem = convertItem(parsedNBTString);
+                allEchestItemsNBT[itECSlot] = convertedItem;
                 itECSlot++;
             })
         );
 
         let allArmorItemsNBT = {};
-        let itArmorSlot = 1;
+        let itArmorSlot = 36;
         await Promise.all(
             allArmorItems.map(async (it) => {
-                const parsedNBTString = JSON.parse(it.getNbt().toString());
-                allArmorItemsNBT[itArmorSlot] = parsedNBTString;
+                const nbt = it.getNbt().toString();
+                const parsedNBTString = nbt;
+                const convertedItem = convertItem(parsedNBTString);
+                allArmorItemsNBT[itArmorSlot] = convertedItem;
                 itArmorSlot++;
             })
         );
 
-        const playerDB = new DB(`./plugins/SavePlayers/player-${pl.realName}.json`);
-
-        playerDB.set(`data`, {
-            pos: { x: pos.x.toFixed(0), y: pos.y.toFixed(0), z: pos.z.toFixed(0) },
-            inv: allInvItemsNBT,
-            echest: allEchestItemsNBT,
-            armor: allArmorItemsNBT,
+        writeJsonToFile(`./plugins/SavePlayers/player-${pl.realName}.json`, {
+            data: {
+                pos: { x: pos.x.toFixed(0), y: pos.y.toFixed(0), z: pos.z.toFixed(0) },
+                inv: allInvItemsNBT,
+                echest: allEchestItemsNBT,
+                armor: allArmorItemsNBT,
+            }
         });
 
         return true;
     } catch (error) {
-        console.error(`Ошибка при сохранении инвентаря игрока: ${error.message}`);
+        Logger.error(`Ошибка при сохранении инвентаря игрока: ${error.message}`);
+        console.log(error);
         return false;
     }
 };
